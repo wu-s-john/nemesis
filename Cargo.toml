@@ -1,0 +1,23 @@
+[package]
+name = "nemesis"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ark-std = "0.4"
+ark-ff = "0.4"
+ark-ec = "0.4"
+ark-serialize = "0.4"
+arkworks-utils = "1.0.1"
+ark-crypto-primitives = "0.4"
+ark-bls12-381 = "0.4"
+curve25519-dalek = "3.2.0"
+rand = "0.8.5"
+
+[lib]
+name = "nemesis"
+path = "src/lib.rs"
+
+[[bin]]
+name = "nemesis"
+path = "src/main.rs"
