@@ -1,5 +1,13 @@
+use std::marker::PhantomData;
+use ark_crypto_primitives::sponge::poseidon::PoseidonConfig;
+use ark_crypto_primitives::sponge::poseidon::PoseidonSponge;
+use ark_crypto_primitives::sponge::Absorb;
+use ark_crypto_primitives::sponge::CryptographicSponge;
+use ark_ec::AffineRepr;
 use ark_ec::CurveGroup;
 use ark_ff::Field;
+use ark_ff::PrimeField;
+
 
 #[derive(Clone)]
 pub struct BulletproofGenerators<G: CurveGroup + Clone> {
@@ -25,15 +33,124 @@ pub trait VerifierChallenger<S: Field + Clone, G: CurveGroup<ScalarField = S> + 
     fn generate_challenge(&self, proof: &BulletproofRecProof<S, G>) -> S;
 }
 
+pub trait BulletproofSystem<S: Field + Clone, G: CurveGroup<ScalarField = S> + Clone> {
+    fn prove(&self, generators: BulletproofGenerators<G>, v1: Vec<S>, v2: Vec<S>) -> BulletproofProof<S, G>;
+    fn verify(&self, proof: BulletproofProof<S, G>, generators: BulletproofGenerators<G>) -> bool;
+}
+
+pub struct BulletproofSystemImpl<S, G, C>
+where
+    S: Field + Clone,
+    G: CurveGroup<ScalarField = S> + Clone,
+    C: VerifierChallenger<S, G>,
+{
+    challenger: C,
+    _phantom: PhantomData<(S, G)>,
+}
+
+impl<S, G, C> BulletproofSystem<S, G> for BulletproofSystemImpl<S, G, C>
+where
+    S: Field + Clone,
+    G: CurveGroup<ScalarField = S> + Clone,
+    C: VerifierChallenger<S, G>,
+{
+    fn prove(
+        &self,
+        generators: BulletproofGenerators<G>,
+        v1: Vec<S>,
+        v2: Vec<S>,
+    ) -> BulletproofProof<S, G> {
+        fn prove_recursive<S, G, C>(
+            system: &BulletproofSystemImpl<S, G, C>,
+            generators: BulletproofGenerators<G>,
+            v1: Vec<S>,
+            v2: Vec<S>,
+            mut rec_proofs: Vec<(BulletproofRecProof<S, G>, BulletproofVerifierChallenge<S>)>,
+        ) -> BulletproofProof<S, G>
+        where
+            S: Field + Clone,
+            G: CurveGroup<ScalarField = S> + Clone,
+            C: VerifierChallenger<S, G>,
+        {
+            if v1.len() == 0 {
+                panic!("Invalid input: v1 and v2 must not be empty");
+            } else if v1.len() == 1 {
+                let small_proof = prover::prove_small::<S, G>(v1[0], v2[0]);
+                BulletproofProof {
+                    rec_proofs,
+                    small_proof,
+                }
+            } else {
+                let rec_proof = prover::prove_rec(generators.clone(), v1.clone(), v2.clone());
+                let challenge = system.challenger.generate_challenge(&rec_proof);
+                rec_proofs.push((rec_proof, BulletproofVerifierChallenge { random_challenge: challenge }));
+
+                let (new_generators, new_v1, new_v2) = prove_update(BulletproofVerifierChallenge { random_challenge: challenge }, generators, v1, v2);
+
+                prove_recursive(system, new_generators, new_v1, new_v2, rec_proofs)
+            }
+        }
+
+        prove_recursive(self, generators, v1, v2, Vec::new())
+    }
+
+    fn verify(&self, proof: BulletproofProof<S, G>, generators: BulletproofGenerators<G>) -> bool {
+        let current_proof = proof;
+        let mut current_generators = generators;
+
+        for i in 0..(current_proof.rec_proofs.len() - 1) {
+            let (rec_proof, challenge) = &current_proof.rec_proofs[i];
+            let next_commitment = &current_proof.rec_proofs[i + 1].0.pedersen_commitment;
+            let verification_passed = verifier::verify_rec(rec_proof, challenge, next_commitment);
+            if !verification_passed {
+                return false;
+            }
+
+            current_generators = update_generators(&current_generators, challenge.random_challenge);
+        }
+
+        let small_proof = &current_proof.small_proof;
+        let final_commitment = &current_proof.rec_proofs.last().unwrap().0.pedersen_commitment;
+
+        verifier::verify_small(&small_proof, &current_generators, final_commitment)
+    }
+}
+
+
 pub struct DefaultVerifierChallenger;
 
-impl<S: Field + Clone, G: CurveGroup<ScalarField = S> + Clone> VerifierChallenger<S, G> for DefaultVerifierChallenger {
+impl<S, G> VerifierChallenger<S, G> for DefaultVerifierChallenger
+where
+    S: PrimeField + Absorb + Clone,
+    G: CurveGroup<ScalarField = S, BaseField = S> + Clone,
+    G::Affine: Absorb ,
+{
     fn generate_challenge(&self, proof: &BulletproofRecProof<S, G>) -> S {
-        // This is a placeholder implementation.
-        // In a real-world scenario, you would use a cryptographic hash function
-        // to generate the challenge based on the proof components.
-        // For now, we'll just return a dummy value.
-        S::from(1u64)
+        // Obtain Poseidon parameters for field S
+        let params = PoseidonConfig::<S>::new(
+            8,  // full_rounds
+            57, // partial_rounds
+            5,  // alpha (exponent)
+            vec![vec![S::one(); 3]; 3], // mds matrix (placeholder)
+            vec![vec![S::zero(); 3]; 65], // ark (placeholder)
+            2,  // rate
+            1   // capacity
+        );
+        let mut sponge = PoseidonSponge::<S>::new(&params);
+        
+        let pedersen_commitment_affine = proof.pedersen_commitment.into_affine();
+        sponge.absorb(&pedersen_commitment_affine.x());
+        sponge.absorb(&pedersen_commitment_affine.y());
+
+        let l_value_affine = proof.l_value.into_affine();
+        sponge.absorb(&l_value_affine.x());
+        sponge.absorb(&l_value_affine.y());
+
+        let r_value_affine = proof.r_value.into_affine();
+        sponge.absorb(&r_value_affine.x());
+        sponge.absorb(&r_value_affine.y());
+
+        sponge.squeeze_field_elements(1)[0]
     }
 }
 
@@ -51,12 +168,10 @@ pub struct BulletproofProof<S: Field, G: CurveGroup<ScalarField = S>> {
 }
 
 
-
-
 mod prover {
     use super::*;
 
-    fn prove_rec<S: Field, G: CurveGroup<ScalarField = S>>(
+    pub fn prove_rec<S: Field, G: CurveGroup<ScalarField = S>>(
         generators: BulletproofGenerators<G>,
         v1: Vec<S>,
         v2: Vec<S>,
@@ -89,7 +204,7 @@ mod prover {
         }
     }
 
-    fn prove_small<S: Field, G: CurveGroup<ScalarField = S>>(
+    pub fn prove_small<S: Field, G: CurveGroup<ScalarField = S>>(
         x1: S,
         x2: S,
     ) -> BulletproofProofSmall<S> {
@@ -99,68 +214,12 @@ mod prover {
             dot_product: x1 * x2,
         }
     }
-
-    pub fn prove<S: Field, G: CurveGroup<ScalarField = S>>(
-        generators: BulletproofGenerators<G>,
-        v1: Vec<S>,
-        v2: Vec<S>,
-    ) -> BulletproofProof<S, G> {
-        fn prove_recursive<S: Field, G: CurveGroup<ScalarField = S>>(
-            generators: BulletproofGenerators<G>,
-            v1: Vec<S>,
-            v2: Vec<S>,
-            mut rec_proofs: Vec<(BulletproofRecProof<S, G>, BulletproofVerifierChallenge<S>)>,
-        ) -> BulletproofProof<S, G> {
-            if v1.len() <= 2 {
-                let small_proof = if v1.len() == 2 {
-                    prove_small(v1[0], v2[0])
-                } else {
-                    prove_small(v1[0], v2[0])
-                };
-                BulletproofProof {
-                    rec_proofs,
-                    small_proof,
-                }
-            } else {
-                let rec_proof = prove_rec(generators.clone(), v1.clone(), v2.clone());
-                let challenge = super::verifier_rec(rec_proof.clone()).expect("Verification failed");
-                rec_proofs.push((rec_proof, challenge.clone()));
-
-                let (new_generators, new_v1, new_v2) = super::prove_update(challenge, generators, v1, v2);
-
-                prove_recursive(new_generators, new_v1, new_v2, rec_proofs)
-            }
-        }
-
-        prove_recursive(generators, v1, v2, Vec::new())
-    }
 }
 
 mod verifier {
     use super::*;
 
-    pub fn verify<S: Field, G: CurveGroup<ScalarField = S>>(proof: BulletproofProof<S, G>, generators: BulletproofGenerators<G>) -> bool {
-        let current_proof = proof;
-        let mut current_generators = generators;
-
-        for i in 0..(current_proof.rec_proofs.len() - 1) {
-            let (rec_proof, challenge) = &current_proof.rec_proofs[i];
-            let next_commitment = &current_proof.rec_proofs[i + 1].0.pedersen_commitment;
-            let verification_passed = verify_rec(rec_proof, challenge, next_commitment);
-            if !verification_passed {
-                return false;
-            }
-
-            current_generators = update_generators(&current_generators, challenge.random_challenge);
-        }
-
-        let small_proof = &current_proof.small_proof;
-        let final_commitment = &current_proof.rec_proofs.last().unwrap().0.pedersen_commitment;
-
-        verify_small(&small_proof, &current_generators, final_commitment)
-    }
-
-    fn verify_rec<S: Field, G: CurveGroup<ScalarField = S>>(
+    pub fn verify_rec<S: Field, G: CurveGroup<ScalarField = S>>(
         proof: &BulletproofRecProof<S, G>,
         challenge: &BulletproofVerifierChallenge<S>,
         next_commitment: &G
@@ -177,7 +236,7 @@ mod verifier {
         computed_commitment == *next_commitment
     }
 
-    fn verify_small<S: Field, G: CurveGroup<ScalarField = S>>(proof: &BulletproofProofSmall<S>, generators: &BulletproofGenerators<G>, final_commitment: &G) -> bool {
+    pub fn verify_small<S: Field, G: CurveGroup<ScalarField = S>>(proof: &BulletproofProofSmall<S>, generators: &BulletproofGenerators<G>, final_commitment: &G) -> bool {
         // make sure the generators are of only size 1
         assert!(generators.g.len() == 1 && generators.h.len() == 1);
 
