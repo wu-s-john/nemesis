@@ -3,12 +3,11 @@ use ark_ec::Group;
 use ark_ff::Field;
 
 use crate::bulletproofs::prover::prover;
-use crate::bulletproofs::traits::BulletproofRecProof;
 use crate::bulletproofs::verifier_challenger::BulletproofVerifierChallenge;
+use crate::bulletproofs::BulletproofRecProof;
 use crate::BulletproofSystem;
 
-use super::helpers::*;
-use super::traits::*;
+use super::{helpers::*, BulletproofGenerators, BulletproofProof};
 use super::verifier::verifier;
 use super::verifier_challenger::VerifierChallenger;
 

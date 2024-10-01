@@ -1,3 +1,3 @@
 pub mod bulletproofs;
 
-pub use bulletproofs::traits::BulletproofSystem;
+pub use bulletproofs::BulletproofSystem;

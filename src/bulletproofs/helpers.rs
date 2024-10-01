@@ -1,7 +1,7 @@
 use ark_ec::Group;
 use ark_ff::Field;
 
-use super::{traits::BulletproofGenerators, verifier_challenger::BulletproofVerifierChallenge};
+use super::{BulletproofGenerators, verifier_challenger::BulletproofVerifierChallenge};
 
 // Compute: u * <a, b> + <a, g> + <b, h>
 // where <x, y> denotes the dot product or multi-scalar multiplication

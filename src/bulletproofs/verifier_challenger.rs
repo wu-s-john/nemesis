@@ -9,7 +9,7 @@ use ark_ff::Field;
 use ark_ff::PrimeField;
 use std::fmt::Debug;
 
-use super::traits::BulletproofRecProof;
+use super::BulletproofRecProof;
 
 pub struct DefaultVerifierChallenger;
 

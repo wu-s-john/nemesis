@@ -2,7 +2,7 @@ use ark_ec::Group;
 use ark_ff::Field;
 
 pub mod verifier {
-    use crate::bulletproofs::{traits::{BulletproofGenerators, BulletproofProofSmall, BulletproofRecProof}, verifier_challenger::BulletproofVerifierChallenge};
+    use crate::bulletproofs::{BulletproofGenerators, BulletproofProofSmall, BulletproofRecProof, BulletproofVerifierChallenge};
 
     use super::*;
 

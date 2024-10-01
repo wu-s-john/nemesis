@@ -10,10 +10,11 @@ use crate::bulletproofs::helpers::{compute_dot_product, compute_pedersen_commitm
 use crate::bulletproofs::{
     prover::prover,
     system::BulletproofSystemImpl,
-    traits::{BulletproofGenerators, BulletproofRecProof, BulletproofSystem},
     verifier::verifier,
     verifier_challenger::{BulletproofVerifierChallenge, VerifierChallenger},
 };
+
+use super::{BulletproofGenerators, BulletproofRecProof, BulletproofSystem};
 
 pub struct ConstantChallenger<S: Field + Clone> {
     constant: S,
@@ -29,8 +30,8 @@ where
     }
 }
 
-fn setup_system(constant: Scalar) -> impl BulletproofSystem<Scalar, G1> {
-    BulletproofSystemImpl {
+fn setup_system(constant: Scalar) -> BulletproofSystemImpl::<Scalar, G1, ConstantChallenger<Scalar>> {
+    BulletproofSystemImpl::<Scalar, G1, ConstantChallenger<Scalar>> {
         challenger: ConstantChallenger { constant },
         _phantom: std::marker::PhantomData,
     }

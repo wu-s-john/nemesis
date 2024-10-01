@@ -1,7 +1,9 @@
 use ark_ec::Group;
 use ark_ff::Field;
 use super::helpers::*;
-use crate::bulletproofs::traits::{BulletproofGenerators, BulletproofProofSmall, BulletproofRecProof};
+use super::BulletproofGenerators;
+use super::BulletproofProofSmall;
+use super::BulletproofRecProof;
 
 pub mod prover {
     use super::*;
