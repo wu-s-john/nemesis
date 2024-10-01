@@ -4,19 +4,21 @@ use ark_crypto_primitives::sponge::Absorb;
 use ark_crypto_primitives::sponge::CryptographicSponge;
 use ark_ec::AffineRepr;
 use ark_ec::CurveGroup;
+use ark_ec::Group;
 use ark_ff::Field;
 use ark_ff::PrimeField;
+use std::fmt::Debug;
 
 use super::traits::BulletproofRecProof;
 
 pub struct DefaultVerifierChallenger;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct BulletproofVerifierChallenge<S: Field + Clone> {
     pub random_challenge: S,
 }
 
-pub trait VerifierChallenger<S: Field + Clone, G: CurveGroup<ScalarField = S> + Clone> {
+pub trait VerifierChallenger<S: Field + Clone, G: Group<ScalarField = S> + Clone> {
     fn generate_challenge(&self, proof: &BulletproofRecProof<S, G>) -> S;
 }
 

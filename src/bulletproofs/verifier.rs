@@ -1,4 +1,4 @@
-use ark_ec::CurveGroup;
+use ark_ec::Group;
 use ark_ff::Field;
 
 pub mod verifier {
@@ -6,7 +6,7 @@ pub mod verifier {
 
     use super::*;
 
-    pub fn verify_rec<S: Field, G: CurveGroup<ScalarField = S>>(
+    pub fn verify_rec<S: Field, G: Group<ScalarField = S>>(
         proof: &BulletproofRecProof<S, G>,
         challenge: &BulletproofVerifierChallenge<S>,
         next_commitment: &G
@@ -23,7 +23,7 @@ pub mod verifier {
         computed_commitment == *next_commitment
     }
 
-    pub fn verify_small<S: Field, G: CurveGroup<ScalarField = S>>(proof: &BulletproofProofSmall<S>, generators: &BulletproofGenerators<G>, final_commitment: &G) -> bool {
+    pub fn verify_small<S: Field, G: Group<ScalarField = S>>(proof: &BulletproofProofSmall<S, G>, generators: &BulletproofGenerators<G>) -> bool {
         // make sure the generators are of only size 1
         assert!(generators.g.len() == 1 && generators.h.len() == 1);
 
@@ -31,7 +31,8 @@ pub mod verifier {
         let h_value = generators.h[0];
 
         let computed_commitment = g_value.mul(proof.value1) + h_value.mul(proof.value2) + generators.u.mul(proof.dot_product);
+        
 
-        computed_commitment == *final_commitment
+        computed_commitment == proof.pedersen_commitment
     }
 }

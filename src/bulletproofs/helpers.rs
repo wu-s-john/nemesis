@@ -82,10 +82,10 @@ pub fn prove_update<S: Field, G: Group<ScalarField = S>>(
 
     // Update v1 and v2
     let v1_new: Vec<S> = v1[..m].iter().zip(v1[m..].iter())
-        .map(|(a_l, a_r)| *a_l * x_inv + *a_r * x)
+        .map(|(a_l, a_r)| *a_l * x + *a_r * x_inv)
         .collect();
     let v2_new: Vec<S> = v2[..m].iter().zip(v2[m..].iter())
-        .map(|(b_l, b_r)| *b_l * x + *b_r * x_inv)
+        .map(|(b_l, b_r)| *b_l * x_inv + *b_r * x)
         .collect();
 
     // Update generators

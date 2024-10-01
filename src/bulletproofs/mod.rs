@@ -4,3 +4,4 @@ mod verifier;
 mod helpers;
 mod verifier_challenger;
 mod system;
+mod test;
