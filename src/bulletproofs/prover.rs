@@ -8,6 +8,25 @@ use super::BulletproofRecProof;
 pub mod prover {
     use super::*;
 
+    /// Computes a recursive Bulletproof for the given input vectors and generators.
+    /// 
+    /// The prover computes the following:
+    /// 1. The dot product of the input vectors: <v1, v2>
+    /// 2. The Pedersen commitment: P = <v1, G> + <v2, H> + <v1, v2>U
+    /// 3. The left value: L = <a_L, b_R>U + Σ(a_L,i * G_R,i) + Σ(b_R,i * H_L,i)
+    /// 4. The right value: R = <a_R, b_L>U + Σ(a_R,i * G_L,i) + Σ(b_L,i * H_R,i)
+    /// 
+    /// Where a_L, a_R are the left and right halves of v1,
+    /// b_L, b_R are the left and right halves of v2,
+    /// G_L, G_R are the left and right halves of the G generators,
+    /// H_L, H_R are the left and right halves of the H generators,
+    /// and U is the blinding factor.
+    /// 
+    /// The vectors and generators are split in half to enable recursive proving.
+    /// This allows for the construction of smaller proofs that collectively
+    /// demonstrate the correctness of the underlying proof we are computing.
+    /// By recursively proving these smaller instances, we can build up to
+    /// the full proof while maintaining efficiency and soundness.
     pub fn prove_rec<S: Field, G: Group<ScalarField = S>>(
         generators: BulletproofGenerators<G>,
         v1: Vec<S>,
@@ -46,6 +65,22 @@ pub mod prover {
         }
     }
 
+    /// Generates a small Bulletproof for the base case of a single scalar multiplication.
+    ///
+    /// This function creates a `BulletproofProofSmall` which represents the base case
+    /// in the recursive Bulletproof construction. It's used when the input vectors
+    /// have been reduced to single elements.
+    ///
+    /// # Arguments
+    /// * `x1` - The single element from the first input vector
+    /// * `x2` - The single element from the second input vector
+    /// * `g1` - The first generator point
+    /// * `g2` - The second generator point
+    /// * `u` - The blinding factor generator point
+    ///
+    /// # Returns
+    /// A `BulletproofProofSmall` containing the input values, their dot product,
+    /// and the Pedersen commitment computed from these values and the provided generators.
     pub fn prove_small<S: Field, G: Group<ScalarField = S>>(
         x1: S,
         x2: S,
