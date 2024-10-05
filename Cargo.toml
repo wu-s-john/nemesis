@@ -7,6 +7,7 @@ edition = "2021"
 ark-std = "0.4"
 ark-ff = "0.4"
 ark-ec = "0.4"
+ark-poly = "0.4.0"
 ark-sponge = "0.3.0"
 ark-serialize = "0.4"
 arkworks-utils = "1.0.1"
@@ -14,6 +15,9 @@ ark-crypto-primitives = { version = "0.4.0", features = ["crh", "sponge"] }
 ark-bls12-381 = "0.4"
 curve25519-dalek = "3.2.0"
 rand = "0.8.5"
+
+[dev-dependencies]
+ark-bls12-381 = "0.4"
 
 [lib]
 name = "nemesis"

@@ -505,6 +505,7 @@ dependencies = [
  "ark-crypto-primitives",
  "ark-ec 0.4.2",
  "ark-ff 0.4.2",
+ "ark-poly",
  "ark-serialize 0.4.2",
  "ark-sponge",
  "ark-std 0.4.0",
