@@ -15,6 +15,7 @@ ark-crypto-primitives = { version = "0.4.0", features = ["crh", "sponge"] }
 ark-bls12-381 = "0.4"
 curve25519-dalek = "3.2.0"
 rand = "0.8.5"
+ark-bls12-377 = "0.4"
 
 [dev-dependencies]
 ark-bls12-381 = "0.4"
