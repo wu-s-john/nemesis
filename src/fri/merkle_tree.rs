@@ -1,7 +1,10 @@
 // merkle_tree.rs
 use ark_crypto_primitives::crh::{CRHScheme, TwoToOneCRHScheme};
 use ark_ff::Field;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use std::{borrow::Borrow, collections::HashMap};
+use std::fmt::Debug;
+use std::hash::Hash;
 
 #[derive(Clone, Debug)]
 pub struct LeafIndex<F: Field> {
@@ -10,48 +13,49 @@ pub struct LeafIndex<F: Field> {
 }
 
 #[derive(Clone, Debug)]
-pub enum MerkleNode<F: Field, H: TwoToOneCRHScheme> {
+pub enum MerkleNode<F: Field, H> {
     Leaf {
-        hash: H::Output,
+        hash: H,
         index: LeafIndex<F>,
         value: F,
     },
     Internal {
-        hash: H::Output,
+        hash: H,
         left: Box<MerkleNode<F, H>>,
         right: Box<MerkleNode<F, H>>,
     },
 }
 
 #[derive(Clone, Debug)]
-pub struct MerkleProof<F: Field, H: TwoToOneCRHScheme> {
-    pub root_hash: H::Output,
-    pub path: Vec<H::Output>,
+pub struct MerkleProof<F: Field, H> {
+    pub root_hash: H,
+    pub path: Vec<H>,
     pub leaf_index: LeafIndex<F>,
 }
 
 #[derive(Clone)]
-pub struct MerkleTree<F: Field,  INCH: TwoToOneCRHScheme> {
-    pub root: MerkleNode<F, INCH>,
+pub struct MerkleTree<F: Field, H> {
+    pub root: MerkleNode<F, H>,
     pub height: usize,
     pub primitive_root: F,
     pub degree: usize,
     // For proof generation
-    nodes_map: HashMap<usize, MerkleNode<F, INCH>>,
+    nodes_map: HashMap<usize, MerkleNode<F, H>>,
 }
 
-pub trait MerkleTreeOperator<F: Field, INCH: TwoToOneCRHScheme> {
+pub trait MerkleTreeOperator<F: Field, INCH: TwoToOneCRHScheme>
+{
     fn create_tree(
         self: &Self,
         points: Vec<(LeafIndex<F>, F)>,
         primitive_root: F,
         degree: usize,
-    ) -> MerkleTree<F, INCH>;
+    ) -> MerkleTree<F, INCH::Output>;
 
-    fn create_proof(&self, tree: &MerkleTree<F, INCH>, leaf_index: &LeafIndex<F>) -> MerkleProof<F, INCH>;
+    fn create_proof(&self, tree: &MerkleTree<F, INCH::Output>, leaf_index: &LeafIndex<F>) -> MerkleProof<F, INCH::Output>;
     fn verify_proof(
         &self,
-        proof: &MerkleProof<F, INCH>,
+        proof: &MerkleProof<F, INCH::Output>,
         value: F
     ) -> bool;
 }
@@ -68,7 +72,6 @@ where
     LCH: CRHScheme<Input = [F], Output = INCH::Output>,
     INCH: TwoToOneCRHScheme + Clone,
     INCH::Output: Clone,
-    INCH::Input: From<(INCH::Output, INCH::Output)>,
     for<'a> &'a INCH::Output: Borrow<INCH::Input>,
 {
     fn create_tree(
@@ -76,9 +79,9 @@ where
         points: Vec<(LeafIndex<F>, F)>,
         primitive_root: F,
         degree: usize,
-    ) -> MerkleTree<F, INCH> {
+    ) -> MerkleTree<F, INCH::Output> {
         // Create leaf nodes
-        let mut leaves: Vec<MerkleNode<F, INCH>> = points
+        let leaves: Vec<MerkleNode<F, INCH::Output>> = points
             .iter()
             .map(|(idx, val)| {
                 // Hash the leaf data using CRHScheme
@@ -110,10 +113,11 @@ where
                     Box::new(current_level[i].clone())
                 };
                 // Hash the two child hashes using TwoToOneCRHScheme
+                
                 let combined_hash = INCH::evaluate(
                     &self.two_to_one_crh_params,
-                    &left.hash(),
-                    &right.hash(),
+                    &left.get_hash(),
+                    &right.get_hash(),
                 )
                 .unwrap();
                 let parent = MerkleNode::Internal {
@@ -137,14 +141,14 @@ where
         }
     }
 
-    fn create_proof(&self, tree: &MerkleTree<F, INCH>, leaf_index: &LeafIndex<F>) -> MerkleProof<F, INCH> {
+    fn create_proof(&self, tree: &MerkleTree<F, INCH::Output>, leaf_index: &LeafIndex<F>) -> MerkleProof<F, INCH::Output> {
         let mut path = Vec::new();
         let mut index = leaf_index.index;
         let mut current_hash = tree
             .nodes_map
             .get(&index)
             .unwrap()
-            .hash()
+            .get_hash()
             .clone();
 
         let mut current_level_nodes = tree.nodes_map.clone();
@@ -154,7 +158,7 @@ where
             let sibling_node = current_level_nodes.get(&sibling_index);
 
             let sibling_hash = if let Some(node) = sibling_node {
-                node.hash()
+                node.get_hash()
             } else {
                 current_hash.clone()
             };
@@ -179,7 +183,7 @@ where
         }
 
         MerkleProof {
-            root_hash: tree.root.hash(),
+            root_hash: tree.root.get_hash(),
             path,
             leaf_index: leaf_index.clone(),
         }
@@ -187,7 +191,7 @@ where
 
     fn verify_proof(
         &self,
-        proof: &MerkleProof<F, INCH>,
+        proof: &MerkleProof<F, INCH::Output>,
         value: F
     ) -> bool {
         let leaf_input = vec![proof.leaf_index.point, value];
@@ -217,8 +221,8 @@ where
     }
 }
 
-impl<F: Field, H: TwoToOneCRHScheme> MerkleNode<F, H> {
-    pub fn hash(&self) -> H::Output {
+impl<F: Field, H: Clone> MerkleNode<F, H> {
+    pub fn get_hash(&self) -> H {
         match self {
             MerkleNode::Leaf { hash, .. } => hash.clone(),
             MerkleNode::Internal { hash, .. } => hash.clone(),

@@ -3,4 +3,5 @@ pub mod merkle_tree;
 pub mod utils;
 pub mod prover;
 pub mod verifier;
-// pub mod protocol;
+pub mod protocol;
+

@@ -13,7 +13,7 @@ pub mod verifier {
         P: DenseUVPolynomial<F>,
         LCH: CRHScheme<Input = [F], Output = INCH::Output>,
         INCH: TwoToOneCRHScheme,
-        MT: MerkleTreeOperator<F, INCH>,
+        MT: MerkleTreeOperator<F, INCH> ,
     {
         tree_operator: MT,
         _phantom: std::marker::PhantomData<(F, P, LCH, INCH)>,
@@ -24,21 +24,34 @@ pub mod verifier {
         F: Field,
         P: DenseUVPolynomial<F>,
         LCH: CRHScheme<Input = [F], Output = INCH::Output>,
-        INCH: TwoToOneCRHScheme,
+        INCH: TwoToOneCRHScheme + PartialEq<INCH::Output>,
         MT: MerkleTreeOperator<F, INCH>,
     {
-        pub fn new(tree_operator: MT) -> Self {
+        pub fn create(tree_operator: MT) -> Self {
             Self {
                 tree_operator,
                 _phantom: std::marker::PhantomData,
             }
         }
 
+
+        pub fn verify_small(
+            final_polynomial: &[F],
+            expected_degree: usize,
+        ) -> bool {
+            // Check that the length of the final_polynomial vector is at most expected_degree + 1
+            if final_polynomial.len() > expected_degree + 1 {
+                return false;
+            }
+
+            // Verify that the highest-degree coefficient (the last non-zero element) is indeed non-zero
+            final_polynomial.iter().rev().find(|&&coeff| coeff != F::zero()).is_some()
+        }
         pub fn verify_rec(
             &self,
-            current_commitment: &FRIRecCommitment<INCH>,
-            round_proof: &FRIRecProof<F, INCH>,
-            next_commitment: &FRIRecCommitment<INCH>,
+            current_commitment: &FRIRecCommitment<INCH::Output>,
+            round_proof: &FRIRecProof<F, INCH::Output>,
+            next_commitment: &FRIRecCommitment<INCH::Output>,
             challenge: F,
         ) -> bool {
             // Verify Merkle proofs for both current and next polynomial evaluations
@@ -80,17 +93,5 @@ pub mod verifier {
             next_commitment.merkle_root == round_proof.next_merkle_root
         }
 
-        pub fn verify_small(
-            final_polynomial: &[F],
-            expected_degree: usize,
-        ) -> bool {
-            // Check that the length of the final_polynomial vector is at most expected_degree + 1
-            if final_polynomial.len() > expected_degree + 1 {
-                return false;
-            }
-
-            // Verify that the highest-degree coefficient (the last non-zero element) is indeed non-zero
-            final_polynomial.iter().rev().find(|&&coeff| coeff != F::zero()).is_some()
-        }
     }
 }

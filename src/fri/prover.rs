@@ -8,8 +8,8 @@ use crate::fri::merkle_tree::{LeafIndex, MerkleProof, MerkleTree, MerkleTreeOper
 
 // Define the structures here
 #[derive(Clone, Debug)]
-pub struct FRIRecCommitment<INCH: TwoToOneCRHScheme> {
-    pub merkle_root: INCH::Output,
+pub struct FRIRecCommitment<H> {
+    pub merkle_root: H,
     pub degree: usize,
 }
 
@@ -19,11 +19,11 @@ pub struct VerifierQuery<F: Field> {
 }
 
 #[derive(Clone, Debug)]
-pub struct FRIRecProof<F: Field, INCH: TwoToOneCRHScheme> {
-    pub current_merkle_root: INCH::Output,
-    pub next_merkle_root: INCH::Output,
-    pub current_merkle_proofs: Vec<(MerkleProof<F, INCH>, MerkleProof<F, INCH>)>,
-    pub next_merkle_proofs: Vec<MerkleProof<F, INCH>>,
+pub struct FRIRecProof<F: Field, H> {
+    pub current_merkle_root: H,
+    pub next_merkle_root: H,
+    pub current_merkle_proofs: Vec<(MerkleProof<F, H>, MerkleProof<F, H>)>,
+    pub next_merkle_proofs: Vec<MerkleProof<F, H>>,
     pub current_evaluations: Vec<(F, F)>,
     pub next_evaluations: Vec<F>,
     pub query: VerifierQuery<F>,
@@ -42,6 +42,11 @@ where
     F: FftField,
     P: DenseUVPolynomial<F>,
 {
+    pub fn new() -> Self {
+        Self {
+            _phantom: std::marker::PhantomData,
+        }
+    }
     /// Creates an evaluation domain for the given degree.
     pub fn create_domain(degree: usize) -> GeneralEvaluationDomain<F> {
         let domain_size = (degree + 1).next_power_of_two();
@@ -54,7 +59,7 @@ where
         polynomial: &P,
         root_of_unity: F,
         tree_operator: &MT,
-    ) -> (MerkleTree<F, INCH>, FRIRecCommitment<INCH>)
+    ) -> (MerkleTree<F, INCH::Output>, FRIRecCommitment<INCH::Output>)
     where
         LCH: CRHScheme<Input = [F], Output = INCH::Output>,
         INCH: TwoToOneCRHScheme,
@@ -82,7 +87,7 @@ where
         let merkle_tree = tree_operator.create_tree(points, root_of_unity, degree);
 
         let commitment = FRIRecCommitment {
-            merkle_root: merkle_tree.root.hash(),
+            merkle_root: merkle_tree.root.get_hash(),
             degree,
         };
 
@@ -92,10 +97,10 @@ where
     /// Proves the evaluation of the polynomial at a given point.
     pub fn prove_evaluation<LCH, INCH, MT>(
         polynomial: &P,
-        merkle_tree: &MerkleTree<F, INCH>,
+        merkle_tree: &MerkleTree<F, INCH::Output>,
         point: LeafIndex<F>,
         tree_operator: &MT,
-    ) -> (F, MerkleProof<F, INCH>)
+    ) -> (F, MerkleProof<F, INCH::Output>)
     where
         LCH: CRHScheme<Input = [F], Output = INCH::Output>,
         INCH: TwoToOneCRHScheme,
@@ -109,16 +114,16 @@ where
     /// Opens the recursive proof for the FRI protocol.
     pub fn open_rec<LCH, INCH, MT>(
         current_polynomial: &P,
-        current_merkle_tree: &MerkleTree<F, INCH>,
+        current_merkle_tree: &MerkleTree<F, INCH::Output>,
         next_polynomial: &P,
-        next_merkle_tree: &MerkleTree<F, INCH>,
+        next_merkle_tree: &MerkleTree<F, INCH::Output>,
         coset_shift: F,
         queries: &[LeafIndex<F>],
         tree_operator: &MT,
-    ) -> FRIRecProof<F, INCH>
+    ) -> FRIRecProof<F, INCH::Output>
     where
         LCH: CRHScheme<Input = [F], Output = INCH::Output>,
-        INCH: TwoToOneCRHScheme + Clone,
+        INCH: TwoToOneCRHScheme,
         MT: MerkleTreeOperator<F, INCH>,
     {
         let current_evaluations: Vec<(F, F)> = queries
@@ -134,7 +139,7 @@ where
             .map(|q| next_polynomial.evaluate(&q.point))
             .collect();
 
-        let current_merkle_proofs: Vec<(MerkleProof<F, INCH>, MerkleProof<F, INCH>)> = queries
+        let current_merkle_proofs: Vec<(MerkleProof<F, INCH::Output>, MerkleProof<F, INCH::Output>)> = queries
             .iter()
             .map(|q| {
                 let query_proof = tree_operator.create_proof(current_merkle_tree, q);
@@ -147,14 +152,14 @@ where
             })
             .collect();
 
-        let next_merkle_proofs: Vec<MerkleProof<F, INCH>> = queries
+        let next_merkle_proofs: Vec<MerkleProof<F, INCH::Output>> = queries
             .iter()
             .map(|q| tree_operator.create_proof(next_merkle_tree, q))
             .collect();
 
         FRIRecProof {
-            current_merkle_root: current_merkle_tree.root.hash(),
-            next_merkle_root: next_merkle_tree.root.hash(),
+            current_merkle_root: current_merkle_tree.root.get_hash(),
+            next_merkle_root: next_merkle_tree.root.get_hash(),
             current_merkle_proofs,
             next_merkle_proofs,
             current_evaluations,
@@ -170,11 +175,10 @@ where
         polynomial: &P,
         challenge: F,
         tree_operator: &MT,
-    ) -> (P, MerkleTree<F, INCH>)
+    ) -> (P, MerkleTree<F, INCH::Output>)
     where
         LCH: CRHScheme<Input = [F], Output = INCH::Output>,
-        INCH: TwoToOneCRHScheme + Clone,
-        INCH::Input: From<(INCH::Output, INCH::Output)>,
+        INCH: TwoToOneCRHScheme,
         MT: MerkleTreeOperator<F, INCH>,
     {
         let degree = polynomial.degree();
